@@ -12,6 +12,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import com.google.mlkit.vision.objects.defaults.PredefinedCategory
 import comdialogy.studios.testml.databinding.ActivityMainBinding
 import kotlinx.android.synthetic.main.activity_main.*
 import java.io.File
@@ -21,18 +25,24 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-typealias LumaListener = (luma: Double) -> Unit
 class MainActivity : AppCompatActivity() {
     private var imageCapture: ImageCapture? = null
 
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var binding: ActivityMainBinding
+    private lateinit var objectDetector: ObjectDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater, null, false)
         setContentView(binding.root)
+        val objectDetectionOptions = ObjectDetectorOptions
+                .Builder()
+                .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+                .build()
+        objectDetector = ObjectDetection.getClient(objectDetectionOptions)
+
         // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera()
@@ -95,6 +105,7 @@ class MainActivity : AppCompatActivity() {
                     .build()
             val autoMLAnalyzer = ImageAnalysis
                     .Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also {
                         it.setAnalyzer(cameraExecutor, AutoMLAnalyzer())
@@ -154,8 +165,23 @@ class MainActivity : AppCompatActivity() {
             if (mediaImage != null) {
                 Log.d(TAG, "Ok!")
                 val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                objectDetector
+                        .process(image)
+                        .addOnSuccessListener {
+                            Log.d(TAG, "Success detection!!")
+                            for (detectedObject in it) {
+                                PredefinedCategory.FASHION_GOOD
+                                Log.d(TAG, "Object detected => ${detectedObject.boundingBox}")
+                                Log.d(TAG, "labels => ${detectedObject.labels}")
+                            }
+                        }
+                        .addOnFailureListener {
+                            Log.d(TAG, "Failure on detection!!")
+                        }
+                        .addOnCompleteListener {
+                            imageProxy.close()
+                        }
             }
-            imageProxy.close()
         }
     }
 
