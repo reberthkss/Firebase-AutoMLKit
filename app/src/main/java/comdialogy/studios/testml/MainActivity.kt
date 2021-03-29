@@ -11,6 +11,7 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.common.InputImage
 import comdialogy.studios.testml.databinding.ActivityMainBinding
 import kotlinx.android.synthetic.main.activity_main.*
 import java.io.File
@@ -41,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Set up the listener for take photo button
-        camera_capture_button.setOnClickListener { takePhoto() }
+        binding.cameraCaptureButton.setOnClickListener { takePhoto() }
 
         outputDirectory = getOutputDirectory()
 
@@ -60,6 +61,7 @@ class MainActivity : AppCompatActivity() {
                 .OutputFileOptions
                 .Builder(photoFile)
                 .build()
+
         imageCapture.takePicture(
                 outputOptions,
                 ContextCompat.getMainExecutor(this),
@@ -91,12 +93,18 @@ class MainActivity : AppCompatActivity() {
                     }
             imageCapture = ImageCapture.Builder()
                     .build()
+            val autoMLAnalyzer = ImageAnalysis
+                    .Builder()
+                    .build()
+                    .also {
+                        it.setAnalyzer(cameraExecutor, AutoMLAnalyzer())
+                    }
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             try {
                 cameraProvider
                         .unbindAll()
                 cameraProvider
-                        .bindToLifecycle(this, cameraSelector, preview, imageCapture)
+                        .bindToLifecycle(this, cameraSelector, preview, imageCapture, autoMLAnalyzer)
             } catch (e: Exception) {
                 Log.d(TAG, "Error => ${e.message}")
             }
@@ -134,6 +142,20 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_SHORT).show()
                 finish()
             }
+        }
+    }
+
+    inner class AutoMLAnalyzer: ImageAnalysis.Analyzer {
+        override fun analyze(imageProxy: ImageProxy) {
+            Log.d(TAG, "Analyzing...")
+            @androidx.camera.core.ExperimentalGetImage
+            val mediaImage = imageProxy.image
+            @androidx.camera.core.ExperimentalGetImage
+            if (mediaImage != null) {
+                Log.d(TAG, "Ok!")
+                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+            }
+            imageProxy.close()
         }
     }
 
